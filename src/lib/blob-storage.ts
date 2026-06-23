@@ -59,6 +59,7 @@ export async function saveMetadata(meta: ImageMeta[]): Promise<void> {
     contentType: 'application/json',
     access: 'public',
     addRandomSuffix: false,
+    allowOverwrite: true,
   });
 }
 
