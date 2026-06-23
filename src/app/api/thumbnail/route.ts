@@ -1,31 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
-import path from 'path';
-import fs from 'fs';
 
 export const dynamic = 'force-dynamic';
 
-const IMAGES_DIR = path.join(process.cwd(), 'private', 'images');
-
 export async function GET(req: NextRequest) {
-  const src = req.nextUrl.searchParams.get('src');
-  if (!src) {
-    return new NextResponse('Missing src param', { status: 400 });
-  }
-
-  const filename = path.basename(src);
-  const fullPath = path.join(IMAGES_DIR, filename);
-
-  if (!fullPath.startsWith(IMAGES_DIR)) {
-    return new NextResponse('Invalid path', { status: 403 });
-  }
-
-  if (!fs.existsSync(fullPath)) {
-    return new NextResponse('Not found', { status: 404 });
+  const url = req.nextUrl.searchParams.get('url');
+  if (!url) {
+    return new NextResponse('Missing url param', { status: 400 });
   }
 
   try {
-    const resized = await sharp(fullPath)
+    const res = await fetch(url);
+    if (!res.ok) return new NextResponse('Failed to fetch', { status: 502 });
+    const buffer = Buffer.from(await res.arrayBuffer());
+
+    const resized = await sharp(buffer)
       .resize(400, undefined, { fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 60, progressive: true })
       .toBuffer();

@@ -12,13 +12,7 @@ const variants = {
 };
 
 function getThumbSrc(src: string): string {
-  try {
-    const url = new URL(src, 'http://localhost');
-    const file = url.searchParams.get('file');
-    if (file) return `/api/thumbnail?src=${encodeURIComponent(file)}`;
-  } catch {}
-  const filename = src.split('/').pop() || src;
-  return `/api/thumbnail?src=${encodeURIComponent(filename)}`;
+  return `/api/thumbnail?url=${encodeURIComponent(src)}`;
 }
 
 function CanvasSceneInner() {
