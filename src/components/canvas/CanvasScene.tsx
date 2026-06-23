@@ -11,6 +11,9 @@ const variants = {
   exit: (dir: number) => ({ x: dir < 0 ? '100%' : '-100%', opacity: 0 }),
 };
 
+const AUTO_INTERVAL = 6000;
+const SWIPE_THRESHOLD = 50;
+
 function getThumbSrc(src: string): string {
   return `/api/thumbnail?url=${encodeURIComponent(src)}`;
 }
@@ -23,6 +26,8 @@ function CanvasSceneInner() {
   const [dir, setDir] = useState(0);
   const [loaded, setLoaded] = useState<Set<number>>(new Set());
   const locked = useRef(false);
+  const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
 
   const goTo = useCallback((next: number) => {
     if (locked.current || artworks.length === 0) return;
@@ -37,13 +42,28 @@ function CanvasSceneInner() {
     setTimeout(() => { locked.current = false; }, 400);
   }, [index, artworks.length]);
 
+  const goNext = useCallback(() => goTo(index + 1), [goTo, index]);
+
+  const resetAutoTimer = useCallback(() => {
+    if (autoTimer.current) clearTimeout(autoTimer.current);
+    if (!modalOpen && artworks.length > 1) {
+      autoTimer.current = setTimeout(goNext, AUTO_INTERVAL);
+    }
+  }, [modalOpen, artworks.length, goNext]);
+
+  useEffect(() => {
+    resetAutoTimer();
+    return () => { if (autoTimer.current) clearTimeout(autoTimer.current); };
+  }, [index, resetAutoTimer]);
+
   const handleWheel = useCallback((e: WheelEvent) => {
     if (modalOpen) return;
     e.preventDefault();
     const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
     if (delta > 5) goTo(index + 1);
     else if (delta < -5) goTo(index - 1);
-  }, [goTo, index, modalOpen]);
+    resetAutoTimer();
+  }, [goTo, index, modalOpen, resetAutoTimer]);
 
   useEffect(() => {
     if (artworks.length === 0) return;
@@ -55,16 +75,34 @@ function CanvasSceneInner() {
     if (modalOpen) return;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') goTo(index + 1);
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') goTo(index - 1);
-  }, [goTo, index, modalOpen]);
+    resetAutoTimer();
+  }, [goTo, index, modalOpen, resetAutoTimer]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [handleKey]);
 
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!touchStart.current) return;
+    const dx = e.changedTouches[0].clientX - touchStart.current.x;
+    const dy = e.changedTouches[0].clientY - touchStart.current.y;
+    touchStart.current = null;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SWIPE_THRESHOLD) {
+      if (dx < 0) goTo(index + 1);
+      else goTo(index - 1);
+      resetAutoTimer();
+    }
+  }, [goTo, index, resetAutoTimer]);
+
   const handleClick = useCallback(() => {
     if (artworks[index]) openModal(artworks[index]);
-  }, [openModal, artworks, index]);
+    resetAutoTimer();
+  }, [openModal, artworks, index, resetAutoTimer]);
 
   useEffect(() => {
     if (artworks.length === 0) return;
@@ -98,11 +136,13 @@ function CanvasSceneInner() {
   const showFull = loaded.has(index);
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-background-light dark:bg-background-dark transition-colors duration-700 touch-none select-none">
+    <div className="fixed inset-0 overflow-hidden bg-background-light dark:bg-background-dark transition-colors duration-700 select-none">
       <div
         className="absolute inset-0 cursor-pointer"
         onClick={handleClick}
         onContextMenu={(e) => e.preventDefault()}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
       >
         <AnimatePresence initial={false} custom={dir} mode="wait">
           <motion.div
@@ -124,9 +164,7 @@ function CanvasSceneInner() {
                 onContextMenu={(e) => e.preventDefault()}
               />
             ) : (
-              <div
-                className="max-w-[92%] md:max-w-[85%] lg:max-w-[75%] max-h-[65vh] md:max-h-[75vh] w-full h-full bg-border-light/50 dark:bg-border-dark/50 rounded-sm animate-pulse"
-              />
+              <div className="max-w-[92%] md:max-w-[85%] lg:max-w-[75%] max-h-[65vh] md:max-h-[75vh] w-full h-full bg-border-light/50 dark:bg-border-dark/50 rounded-sm animate-pulse" />
             )}
           </motion.div>
         </AnimatePresence>
