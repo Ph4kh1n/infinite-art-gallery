@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
   const results: { filename: string; status: string; error?: string }[] = [];
   const newMetas: ImageMeta[] = [];
-  const MAX_SIZE = 4 * 1024 * 1024;
+  const MAX_SIZE = 10 * 1024 * 1024;
 
   for (const file of files) {
     const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
