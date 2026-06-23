@@ -7,6 +7,7 @@ const MAX_MB = 4;
 
 export default function AdminPage() {
   const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
   const [authed, setAuthed] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -30,8 +31,20 @@ export default function AdminPage() {
     if (authed) fetchExisting();
   }, [authed, fetchExisting]);
 
-  const handleAuth = () => {
-    if (password.trim()) setAuthed(true);
+  const handleAuth = async () => {
+    if (!password.trim()) return;
+    setAuthError('');
+    try {
+      const res = await fetch(`/api/upload?token=${encodeURIComponent(password)}`);
+      if (res.ok) {
+        setAuthed(true);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setAuthError(data.error || 'Invalid password');
+      }
+    } catch {
+      setAuthError('Could not connect to server');
+    }
   };
 
   const addFiles = useCallback((list: FileList) => {
@@ -42,9 +55,11 @@ export default function AdminPage() {
       return true;
     });
     const skipped = Array.from(list).length - valid.length;
+    const msgs: { filename: string; status: string; error?: string }[] = [];
     if (skipped > 0) {
-      setResults([{ filename: `${skipped} file(s) skipped (max ${MAX_MB}MB, JPG/PNG/GIF only)`, status: 'error' }]);
+      msgs.push({ filename: `${skipped} file(s) skipped`, status: 'error', error: `Max ${MAX_MB}MB, JPG/PNG/GIF only` });
     }
+    if (msgs.length > 0) setResults(msgs);
     setFiles((prev) => [...prev, ...valid]);
   }, []);
 
@@ -74,12 +89,15 @@ export default function AdminPage() {
       try {
         data = JSON.parse(text);
       } catch {
-        data = { results: [{ filename: 'Upload failed', status: 'error', error: `Server returned ${res.status}: ${text.slice(0, 200)}` }] };
+        data = { results: [{ filename: 'Server error', status: 'error', error: `HTTP ${res.status}: ${text.slice(0, 300)}` }] };
       }
       setResults(data.results || []);
-      if (res.ok) setFiles([]);
+      if (res.ok) {
+        setFiles([]);
+        fetchExisting();
+      }
     } catch (err) {
-      setResults([{ filename: 'Upload failed', status: 'error', error: String(err) }]);
+      setResults([{ filename: 'Request failed', status: 'error', error: String(err) }]);
     } finally {
       setUploading(false);
     }
@@ -95,6 +113,8 @@ export default function AdminPage() {
     setDeleting(null);
   };
 
+  const s = (base: string) => base; // dummy for cursor styles
+
   if (!authed) {
     return (
       <div className="fixed inset-0 flex items-center justify-center" style={{ cursor: 'auto' }}>
@@ -102,14 +122,17 @@ export default function AdminPage() {
           <h1 className="font-display text-display-sm text-foreground-light dark:text-foreground-dark text-center" style={{ cursor: 'auto' }}>Admin</h1>
           <input
             type="password"
-            placeholder="Enter admin password"
+            placeholder="Admin password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => { setPassword(e.target.value); setAuthError(''); }}
             onKeyDown={(e) => e.key === 'Enter' && handleAuth()}
             className="mt-6 w-full px-4 py-3 bg-transparent border border-border-light dark:border-border-dark font-mono text-sm text-foreground-light dark:text-foreground-dark outline-none focus:border-foreground-light dark:focus:border-foreground-dark transition-colors"
-            autoFocus
             style={{ cursor: 'auto' }}
+            autoFocus
           />
+          {authError && (
+            <p className="mt-3 font-mono text-xs text-red-500" style={{ cursor: 'auto' }}>{authError}</p>
+          )}
           <button
             onClick={handleAuth}
             className="mt-4 w-full py-3 font-mono text-xs uppercase tracking-wider text-foreground-light dark:text-foreground-dark border border-border-light dark:border-border-dark hover:bg-border-light dark:hover:bg-border-dark transition-colors"

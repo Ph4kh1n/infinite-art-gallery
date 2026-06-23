@@ -8,19 +8,25 @@ import {
   ImageMeta,
 } from '@/lib/blob-storage';
 
-export async function GET() {
-  if (!isBlobConfigured()) {
-    return NextResponse.json({ error: 'Blob storage not configured. Set BLOB_READ_WRITE_TOKEN.' }, { status: 500 });
-  }
+function checkToken(req: NextRequest): boolean {
+  const token = req.nextUrl.searchParams.get('token');
+  return !!process.env.ADMIN_SECRET && token === process.env.ADMIN_SECRET;
+}
+
+function needSetup() {
+  return NextResponse.json({ error: 'Storage not configured' }, { status: 500 });
+}
+
+export async function GET(req: NextRequest) {
+  if (!isBlobConfigured()) return needSetup();
+  if (!checkToken(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const meta = await getMetadata();
   return NextResponse.json({ images: meta });
 }
 
 export async function POST(req: NextRequest) {
-  if (!isBlobConfigured()) {
-    return NextResponse.json({ error: 'Blob storage not configured. Set BLOB_READ_WRITE_TOKEN.' }, { status: 500 });
-  }
-
+  if (!isBlobConfigured()) return needSetup();
   if (!process.env.ADMIN_SECRET) {
     return NextResponse.json({ error: 'ADMIN_SECRET not set on server' }, { status: 500 });
   }
@@ -65,17 +71,19 @@ export async function POST(req: NextRequest) {
   }
 
   if (newMetas.length > 0) {
-    const existing = await getMetadata();
-    await saveMetadata([...existing, ...newMetas]);
+    try {
+      const existing = await getMetadata();
+      await saveMetadata([...existing, ...newMetas]);
+    } catch (err) {
+      results.push({ filename: 'metadata', status: 'error', error: `Failed to save metadata: ${String(err)}` });
+    }
   }
 
   return NextResponse.json({ results });
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!isBlobConfigured()) {
-    return NextResponse.json({ error: 'Blob storage not configured' }, { status: 500 });
-  }
+  if (!isBlobConfigured()) return needSetup();
 
   const token = req.nextUrl.searchParams.get('token');
   if (!process.env.ADMIN_SECRET || token !== process.env.ADMIN_SECRET) {
