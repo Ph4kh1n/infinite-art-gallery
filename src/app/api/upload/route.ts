@@ -18,9 +18,10 @@ function needSetup() {
 }
 
 export async function GET(req: NextRequest) {
-  if (!isBlobConfigured()) return needSetup();
   if (!checkToken(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
+  if (!isBlobConfigured()) {
+    return NextResponse.json({ images: [] });
+  }
   const meta = await getMetadata();
   return NextResponse.json({ images: meta });
 }
