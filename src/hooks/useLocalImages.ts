@@ -138,12 +138,8 @@ export function useLocalImages(): { artworks: Artwork[]; isLoading: boolean } {
   }, [setArtworks]);
 
   useEffect(() => {
-    if (storedArtworks.length === 0) {
-      fetchImages();
-    } else {
-      setIsLoading(false);
-    }
-  }, [fetchImages, storedArtworks.length]);
+    fetchImages();
+  }, [fetchImages]);
 
   return { artworks: storedArtworks, isLoading };
 }
