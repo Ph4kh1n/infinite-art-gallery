@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif'];
+const MAX_MB = 4;
 
 export default function AdminPage() {
   const [password, setPassword] = useState('');
@@ -35,7 +36,15 @@ export default function AdminPage() {
 
   const addFiles = useCallback((list: FileList) => {
     setResults(null);
-    const valid = Array.from(list).filter((f) => ALLOWED_TYPES.includes(f.type));
+    const valid = Array.from(list).filter((f) => {
+      if (!ALLOWED_TYPES.includes(f.type)) return false;
+      if (f.size > MAX_MB * 1024 * 1024) return false;
+      return true;
+    });
+    const skipped = Array.from(list).length - valid.length;
+    if (skipped > 0) {
+      setResults([{ filename: `${skipped} file(s) skipped (max ${MAX_MB}MB, JPG/PNG/GIF only)`, status: 'error' }]);
+    }
     setFiles((prev) => [...prev, ...valid]);
   }, []);
 
@@ -60,14 +69,17 @@ export default function AdminPage() {
 
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: form });
-      const data = await res.json();
-      setResults(data.results || []);
-      if (res.ok) {
-        setFiles([]);
-        fetchExisting();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { results: [{ filename: 'Upload failed', status: 'error', error: `Server returned ${res.status}: ${text.slice(0, 200)}` }] };
       }
-    } catch {
-      setResults([{ filename: 'Upload failed', status: 'error', error: 'Network error' }]);
+      setResults(data.results || []);
+      if (res.ok) setFiles([]);
+    } catch (err) {
+      setResults([{ filename: 'Upload failed', status: 'error', error: String(err) }]);
     } finally {
       setUploading(false);
     }
@@ -77,17 +89,17 @@ export default function AdminPage() {
     if (!confirm(`Delete ${filename}?`)) return;
     setDeleting(filename);
     try {
-      await fetch(`/api/upload?token=${encodeURIComponent(password)}&file=${encodeURIComponent(filename)}`, { method: 'DELETE' });
-      setExisting((prev) => prev.filter((f) => f.filename !== filename));
+      const res = await fetch(`/api/upload?token=${encodeURIComponent(password)}&file=${encodeURIComponent(filename)}`, { method: 'DELETE' });
+      if (res.ok) setExisting((prev) => prev.filter((f) => f.filename !== filename));
     } catch {}
     setDeleting(null);
   };
 
   if (!authed) {
     return (
-      <div className="fixed inset-0 bg-background-light dark:bg-background-dark flex items-center justify-center">
+      <div className="fixed inset-0 flex items-center justify-center" style={{ cursor: 'auto' }}>
         <div className="w-full max-w-sm mx-6">
-          <h1 className="font-display text-display-sm text-foreground-light dark:text-foreground-dark text-center">Admin</h1>
+          <h1 className="font-display text-display-sm text-foreground-light dark:text-foreground-dark text-center" style={{ cursor: 'auto' }}>Admin</h1>
           <input
             type="password"
             placeholder="Enter admin password"
@@ -96,10 +108,12 @@ export default function AdminPage() {
             onKeyDown={(e) => e.key === 'Enter' && handleAuth()}
             className="mt-6 w-full px-4 py-3 bg-transparent border border-border-light dark:border-border-dark font-mono text-sm text-foreground-light dark:text-foreground-dark outline-none focus:border-foreground-light dark:focus:border-foreground-dark transition-colors"
             autoFocus
+            style={{ cursor: 'auto' }}
           />
           <button
             onClick={handleAuth}
             className="mt-4 w-full py-3 font-mono text-xs uppercase tracking-wider text-foreground-light dark:text-foreground-dark border border-border-light dark:border-border-dark hover:bg-border-light dark:hover:bg-border-dark transition-colors"
+            style={{ cursor: 'pointer' }}
           >
             Enter
           </button>
@@ -109,24 +123,25 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark">
+    <div className="min-h-screen bg-background-light dark:bg-background-dark" style={{ cursor: 'auto' }}>
       <div className="max-w-xl mx-auto px-6 py-12">
-        <h1 className="font-display text-display-sm text-foreground-light dark:text-foreground-dark">Manage Images</h1>
-        <p className="font-mono text-xs text-muted mt-2">JPG, PNG, GIF &middot; Max 20MB each</p>
+        <h1 className="font-display text-display-sm text-foreground-light dark:text-foreground-dark" style={{ cursor: 'auto' }}>Manage Images</h1>
+        <p className="font-mono text-xs text-muted mt-2" style={{ cursor: 'auto' }}>JPG, PNG, GIF &middot; Max {MAX_MB}MB each</p>
 
         {existing.length > 0 && (
           <div className="mt-8">
-            <p className="font-mono text-[10px] text-muted uppercase tracking-widest mb-3">Existing Images ({existing.length})</p>
+            <p className="font-mono text-[10px] text-muted uppercase tracking-widest mb-3" style={{ cursor: 'auto' }}>Existing Images ({existing.length})</p>
             <div className="space-y-1">
               {existing.map((img) => (
                 <div key={img.filename} className="flex items-center justify-between px-4 py-2.5 bg-border-light/20 dark:bg-border-dark/20 rounded-sm">
-                  <span className="font-mono text-xs text-foreground-light dark:text-foreground-dark truncate mr-4">{img.filename}</span>
+                  <span className="font-mono text-xs text-foreground-light dark:text-foreground-dark truncate mr-4" style={{ cursor: 'auto' }}>{img.filename}</span>
                   <div className="flex items-center gap-3 shrink-0">
-                    <span className="font-mono text-[10px] text-muted">{(img.size / 1024 / 1024).toFixed(1)}MB</span>
+                    <span className="font-mono text-[10px] text-muted" style={{ cursor: 'auto' }}>{(img.size / 1024 / 1024).toFixed(1)}MB</span>
                     <button
                       onClick={() => handleDelete(img.filename)}
                       disabled={deleting === img.filename}
                       className="font-mono text-[10px] uppercase tracking-wider text-red-500 hover:text-red-400 transition-colors disabled:opacity-40"
+                      style={{ cursor: 'pointer' }}
                     >
                       {deleting === img.filename ? '...' : 'Delete'}
                     </button>
@@ -138,7 +153,7 @@ export default function AdminPage() {
         )}
 
         <div
-          className={`mt-8 border-2 border-dashed rounded-sm p-10 text-center transition-colors cursor-pointer ${
+          className={`mt-8 border-2 border-dashed rounded-sm p-10 text-center transition-colors ${
             dragOver
               ? 'border-foreground-light dark:border-foreground-dark bg-border-light/30 dark:bg-border-dark/30'
               : 'border-border-light dark:border-border-dark hover:border-muted'
@@ -147,8 +162,9 @@ export default function AdminPage() {
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
           onClick={() => inputRef.current?.click()}
+          style={{ cursor: 'pointer' }}
         >
-          <p className="font-mono text-sm text-muted">Drop images here or click to browse</p>
+          <p className="font-mono text-sm text-muted" style={{ cursor: 'inherit' }}>Drop images here or click to browse</p>
           <input
             ref={inputRef}
             type="file"
@@ -161,18 +177,19 @@ export default function AdminPage() {
 
         {files.length > 0 && (
           <div className="mt-6 space-y-2 p-4 border border-border-light dark:border-border-dark rounded-sm">
-            <p className="font-mono text-[10px] text-muted uppercase tracking-widest mb-2">New files</p>
+            <p className="font-mono text-[10px] text-muted uppercase tracking-widest mb-2" style={{ cursor: 'auto' }}>New files</p>
             {files.map((f, i) => (
               <div key={i} className="flex items-center justify-between">
-                <span className="font-mono text-xs text-foreground-light dark:text-foreground-dark truncate mr-4">{f.name}</span>
-                <span className="font-mono text-[10px] text-muted shrink-0">{(f.size / 1024 / 1024).toFixed(1)}MB</span>
-                <button onClick={() => removeFile(i)} className="ml-3 font-mono text-xs text-muted hover:text-foreground-light dark:hover:text-foreground-dark">&times;</button>
+                <span className="font-mono text-xs text-foreground-light dark:text-foreground-dark truncate mr-4" style={{ cursor: 'auto' }}>{f.name}</span>
+                <span className="font-mono text-[10px] text-muted shrink-0" style={{ cursor: 'auto' }}>{(f.size / 1024 / 1024).toFixed(1)}MB</span>
+                <button onClick={() => removeFile(i)} className="ml-3 font-mono text-xs text-muted hover:text-foreground-light dark:hover:text-foreground-dark" style={{ cursor: 'pointer' }}>&times;</button>
               </div>
             ))}
             <button
               onClick={handleUpload}
               disabled={uploading}
               className="mt-3 w-full py-3 font-mono text-xs uppercase tracking-wider text-foreground-light dark:text-foreground-dark border border-border-light dark:border-border-dark hover:bg-border-light dark:hover:bg-border-dark transition-colors disabled:opacity-40"
+              style={{ cursor: uploading ? 'default' : 'pointer' }}
             >
               {uploading ? 'Uploading...' : `Upload ${files.length} file${files.length > 1 ? 's' : ''}`}
             </button>
@@ -181,8 +198,8 @@ export default function AdminPage() {
 
         {results && (
           <div className="mt-6 space-y-1">
-            {results.map((r) => (
-              <p key={r.filename} className={`font-mono text-xs ${r.status === 'uploaded' ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+            {results.map((r, i) => (
+              <p key={i} className={`font-mono text-xs ${r.status === 'uploaded' ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`} style={{ cursor: 'auto' }}>
                 {r.filename} &mdash; {r.status}{r.error ? `: ${r.error}` : ''}
               </p>
             ))}

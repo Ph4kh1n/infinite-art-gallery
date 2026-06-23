@@ -5,7 +5,7 @@ import path from 'path';
 const IMAGES_DIR = path.join(process.cwd(), 'private', 'images');
 
 const ALLOWED = ['.jpg', '.jpeg', '.png', '.gif'];
-const MAX_SIZE = 20 * 1024 * 1024;
+const MAX_SIZE = 4 * 1024 * 1024;
 
 function checkAuth(token: string | null): boolean {
   const secret = process.env.ADMIN_SECRET;
